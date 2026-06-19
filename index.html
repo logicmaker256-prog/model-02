@@ -1,0 +1,442 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>3D Character Maker</title>
+    <style>
+        /* 画面全体の基本設定 */
+        body {
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+            font-family: 'Helvetica Neue', Arial, 'Hiragino Kaku Gothic ProN', Meiryo, sans-serif;
+            background-color: #f3f4f6;
+        }
+
+        /* 3Dモデルが表示される背景キャンバス */
+        #canvas-container {
+            width: 100vw;
+            height: 100vh;
+            position: absolute;
+            top: 0;
+            left: 0;
+            z-index: 1;
+        }
+
+        /* 左側に浮かぶ操作メニューのパネルの大枠 */
+        .control-panel {
+            position: absolute;
+            top: 15px;
+            left: 15px;
+            z-index: 10;
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(5px); 
+            border-radius: 12px;
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
+            width: 280px;
+            box-sizing: border-box;
+            overflow: hidden; /* 角丸からはみ出ないように */
+        }
+
+        /* ★追加：アコーディオンのヘッダー（クリックする部分） */
+        .panel-header {
+            padding: 12px 16px;
+            background-color: #ff9800; /* オレンジ色で目立たせる */
+            color: white;
+            font-weight: bold;
+            font-size: 15px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            cursor: pointer;
+            user-select: none; /* スマホで長押し選択されないように */
+        }
+
+        .panel-header:active {
+            background-color: #e68a00;
+        }
+
+        /* アイコンの回転アニメーション用 */
+        #toggleIcon {
+            transition: transform 0.3s ease;
+        }
+
+        /* ★追加：アコーディオンの中身（折りたたまれる部分） */
+        .panel-content {
+            padding: 20px;
+            max-height: 65vh; /* スマホ画面からはみ出さないように高さを制限 */
+            overflow-y: auto; /* 縦スクロール可能に */
+            display: block; 
+        }
+
+        /* 閉じた時の状態 */
+        .panel-content.is-closed {
+            display: none;
+        }
+
+        /* 各設定項目のグループ */
+        .control-group {
+            margin-bottom: 14px;
+        }
+
+        /* 項目のタイトルラベル */
+        .control-group label {
+            display: block;
+            font-size: 13px;
+            font-weight: bold;
+            margin-bottom: 6px;
+            color: #333;
+        }
+
+        /* スライダーの設定 */
+        .control-group input[type="range"] {
+            width: 100%;
+            margin: 0;
+            cursor: pointer;
+        }
+
+        /* セレクトボックスとカラーピッカーの設定 */
+        .control-group select, 
+        .control-group input[type="color"] {
+            width: 100%;
+            padding: 8px;
+            border-radius: 6px;
+            border: 1px solid #ccc;
+            font-size: 14px;
+            background: #fff;
+            box-sizing: border-box;
+            cursor: pointer;
+        }
+
+        /* カラーピッカーの高さ調整 */
+        .control-group input[type="color"] {
+            height: 38px;
+            padding: 2px;
+        }
+
+        /* オレンジ色のダウンロードボタン */
+        #downloadBtn {
+            width: 100%;
+            padding: 12px;
+            background-color: #ff9800;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            font-size: 15px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: background-color 0.2s, transform 0.1s;
+            margin-top: 10px;
+            box-shadow: 0 4px 12px rgba(255, 152, 0, 0.3);
+        }
+
+        #downloadBtn:hover {
+            background-color: #e68a00;
+        }
+        #downloadBtn:active {
+            transform: scale(0.98);
+        }
+
+        /* スマホ向けにスクロールバーをすっきりさせる */
+        .panel-content::-webkit-scrollbar {
+            width: 6px;
+        }
+        .panel-content::-webkit-scrollbar-thumb {
+            background: rgba(0, 0, 0, 0.2);
+            border-radius: 3px;
+        }
+
+        /* ── ポーズパネル ── */
+        #pose-panel {
+            position: absolute;
+            bottom: 15px;
+            right: 15px;
+            z-index: 10;
+            background: rgba(255,255,255,0.95);
+            backdrop-filter: blur(5px);
+            border-radius: 12px;
+            box-shadow: 0 8px 24px rgba(0,0,0,0.15);
+            width: 185px;
+            overflow: hidden;
+        }
+        #pose-panel-header {
+            padding: 10px 14px;
+            background-color: #7c4dff;
+            color: white;
+            font-weight: bold;
+            font-size: 14px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            cursor: pointer;
+            user-select: none;
+        }
+        #pose-panel-header:active { background-color: #6a3fd4; }
+        #pose-panel-body {
+            padding: 10px;
+            display: block;
+            max-height: 55vh;
+            overflow-y: auto;
+        }
+        .panel-section-label {
+            font-size: 11px;
+            font-weight: bold;
+            color: #888;
+            letter-spacing: 0.05em;
+            margin-bottom: 5px;
+            padding-left: 2px;
+        }
+        #pose-buttons, #command-buttons {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+            margin-bottom: 4px;
+        }
+        .pose-btn {
+            width: 100%;
+            padding: 9px 8px;
+            border: 2px solid #ddd;
+            border-radius: 8px;
+            background: #f8f8f8;
+            font-size: 13px;
+            font-weight: bold;
+            cursor: pointer;
+            text-align: left;
+            transition: all 0.15s;
+        }
+        .pose-btn:active  { transform: scale(0.97); }
+        .pose-btn.active  { background: #7c4dff; border-color: #7c4dff; color: white; }
+        .cmd-btn {
+            width: 100%;
+            padding: 9px 8px;
+            border: 2px solid #ff9800;
+            border-radius: 8px;
+            background: #fff8f0;
+            font-size: 13px;
+            font-weight: bold;
+            color: #e65c00;
+            cursor: pointer;
+            text-align: left;
+            transition: all 0.15s;
+        }
+        .cmd-btn:active { transform: scale(0.97); }
+        .cmd-btn.active { background: #ff9800; border-color: #ff9800; color: white; }
+    </style>
+</head>
+<body>
+
+    <div id="canvas-container"></div>
+
+    <!-- ポーズパネル -->
+    <div id="pose-panel">
+        <div id="pose-panel-header">🎭 ポーズ <span id="pose-toggle-icon">▲</span></div>
+        <div id="pose-panel-body">
+            <div class="panel-section-label">ポーズ</div>
+            <div id="pose-buttons"></div>
+            <div class="panel-section-label" style="margin-top:10px">コマンド</div>
+            <div id="command-buttons"></div>
+        </div>
+    </div>
+
+    <div class="control-panel">
+        
+        <div class="panel-header" id="panelHeader">
+            <span>⚙️ カスタマイズ</span>
+            <span id="toggleIcon">▼</span>
+        </div>
+
+        <div class="panel-content" id="panelContent">
+            
+            <div class="control-group">
+                <label for="headScaleX">頭の横幅:</label>
+                <input type="range" id="headScaleX" min="0.6" max="1.4" step="0.05" value="1.0">
+            </div>
+
+            <div class="control-group">
+                <label for="headScaleY">頭の縦長:</label>
+                <input type="range" id="headScaleY" min="0.6" max="1.4" step="0.05" value="1.1">
+            </div>
+
+            <div class="control-group">
+                <label for="jawWidth">あごの細さ:</label>
+                <input type="range" id="jawWidth" min="0.2" max="1.0" step="0.05" value="0.8">
+            </div>
+
+            <div class="control-group">
+                <label for="bustSize">胸の大きさ（バスト）:</label>
+                <input type="range" id="bustSize" min="0.0" max="1.5" step="0.05" value="0.5">
+            </div>
+
+            <div class="control-group">
+                <label for="bustProtrude">胸の飛び出し量:</label>
+                <input type="range" id="bustProtrude" min="0.0" max="0.6" step="0.01" value="0.33">
+            </div>
+
+            <div class="control-group">
+                <label for="eyeType">目の形:</label>
+                <select id="eyeType">
+                    <option value="anime01">丸いアニメ目 (01)</option>
+                    <option value="anime02">ジト目・横長 (02)</option>
+                    <option value="anime03">にっこり笑顔 (03)</option>
+                </select>
+            </div>
+
+            <div class="control-group">
+                <label for="hairType">髪型:</label>
+                <select id="hairType">
+                    <option value="short01">ショートヘア</option>
+                    <option value="long01">ロングヘア</option>
+                </select>
+            </div>
+
+            <div class="control-group">
+                <label for="earType">耳の形:</label>
+                <select id="earType">
+                    <option value="human">人間の耳</option>
+                    <option value="elf">エルフの耳</option>
+                    <option value="none">なし（耳を隠す）</option>
+                </select>
+            </div>
+
+            <div class="control-group">
+                <label>肌の色:</label>
+                <div class="toggle-wrap">
+                    <button type="button" class="toggle-btn active" id="skinPresetNormal" onclick="setSkinPreset('#ffe0c0', this)">肌色</button>
+                    <button type="button" class="toggle-btn" id="skinPresetTan" onclick="setSkinPreset('#d9a066', this)">小麦色</button>
+                    <button type="button" class="toggle-btn" id="skinPresetFair" onclick="setSkinPreset('#fff1e6', this)">美白</button>
+                </div>
+            </div>
+
+            <div class="control-group">
+                <label for="bodyColor">肌の色（カスタム）:</label>
+                <input type="color" id="bodyColor" value="#ffe0c0">
+            </div>
+
+            <div class="control-group">
+                <label>服を着せる:</label>
+                <div class="toggle-wrap">
+                    <button class="toggle-btn active" id="wearShirtBtn" onclick="setWearShirt(true)">👕 着る</button>
+                    <button class="toggle-btn" id="noShirtBtn" onclick="setWearShirt(false)">🚫 脱ぐ</button>
+                </div>
+            </div>
+
+            <div class="control-group" id="shirtColorGroup">
+                <label for="shirtColor">Tシャツの色:</label>
+                <input type="color" id="shirtColor" value="#ffffff">
+            </div>
+
+            <div class="control-group">
+                <label>ズボンを履かせる:</label>
+                <div class="toggle-wrap">
+                    <button class="toggle-btn" id="wearPantsBtn" onclick="setWearPants(true)">👖 履く</button>
+                    <button class="toggle-btn active" id="noPantsBtn" onclick="setWearPants(false)">🚫 脱ぐ</button>
+                </div>
+            </div>
+
+            <div class="control-group" id="pantsColorGroup" style="display:none">
+                <label for="pantsColor">ズボンの色:</label>
+                <input type="color" id="pantsColor" value="#4466aa">
+            </div>
+
+            <div class="control-group">
+                <label>長靴を履かせる:</label>
+                <div class="toggle-wrap">
+                    <button class="toggle-btn" id="wearBootsBtn" onclick="setWearBoots(true)">🥾 履く</button>
+                    <button class="toggle-btn active" id="noBootsBtn" onclick="setWearBoots(false)">🚫 脱ぐ</button>
+                </div>
+            </div>
+
+            <div class="control-group" id="bootsColorGroup" style="display:none">
+                <label for="bootsColor">長靴の色:</label>
+                <input type="color" id="bootsColor" value="#e8c830">
+            </div>
+
+            <div class="control-group">
+                <label>右手に剣を持たせる:</label>
+                <div class="toggle-wrap">
+                    <button class="toggle-btn" id="wearSwordBtn" onclick="setHasSword(true)">🗡️ 持つ</button>
+                    <button class="toggle-btn active" id="noSwordBtn" onclick="setHasSword(false)">🚫 持たない</button>
+                </div>
+            </div>
+
+            <div class="control-group">
+                <label>アイドルアニメ:</label>
+                <div class="toggle-wrap">
+                    <button class="toggle-btn active" id="idleOnBtn"  onclick="setIdle(true)">▶ ON</button>
+                    <button class="toggle-btn"        id="idleOffBtn" onclick="setIdle(false)">⏹ OFF</button>
+                </div>
+            </div>
+
+            <button id="downloadBtn">GLBをダウンロード</button>
+        </div>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/exporters/GLTFExporter.js"></script>
+    
+    <script>
+        function setSkinPreset(hexColor, btnEl) {
+            document.querySelectorAll('#skinPresetNormal, #skinPresetTan, #skinPresetFair').forEach(b => b.classList.remove('active'));
+            btnEl.classList.add('active');
+            document.getElementById('bodyColor').value = hexColor;
+            characterData.bodyColor = hexColor;
+            createCharacter(characterData);
+        }
+
+        function setHasSword(wear) {
+            document.getElementById('wearSwordBtn').classList.toggle('active', wear);
+            document.getElementById('noSwordBtn').classList.toggle('active', !wear);
+            characterData.hasSword = wear;
+            createCharacter(characterData);
+        }
+
+        function setWearBoots(wear) {
+            document.getElementById('wearBootsBtn').classList.toggle('active', wear);
+            document.getElementById('noBootsBtn').classList.toggle('active', !wear);
+            document.getElementById('bootsColorGroup').style.display = wear ? '' : 'none';
+            const color = document.getElementById('bootsColor').value;
+            characterData.bootsColor = wear ? color : 'none';
+            createCharacter(characterData);
+        }
+
+        function setWearPants(wear) {
+            document.getElementById('wearPantsBtn').classList.toggle('active', wear);
+            document.getElementById('noPantsBtn').classList.toggle('active', !wear);
+            document.getElementById('pantsColorGroup').style.display = wear ? '' : 'none';
+            const color = document.getElementById('pantsColor').value;
+            characterData.pantsColor = wear ? color : 'none';
+            createCharacter(characterData);
+        }
+
+        function setWearShirt(wear) {
+            // ボタンのactive切り替え
+            document.getElementById('wearShirtBtn').classList.toggle('active', wear);
+            document.getElementById('noShirtBtn').classList.toggle('active', !wear);
+            // 色ピッカーの表示切替
+            document.getElementById('shirtColorGroup').style.display = wear ? '' : 'none';
+            // キャラ再生成
+            const color = document.getElementById('shirtColor').value;
+            characterData.shirtColor = wear ? color : 'none';
+            createCharacter(characterData);
+        }
+        const header = document.getElementById('panelHeader');
+        const content = document.getElementById('panelContent');
+        const icon = document.getElementById('toggleIcon');
+
+        // オレンジ色のヘッダー部分をタップした時の処理
+        header.addEventListener('click', () => {
+            content.classList.toggle('is-closed'); // 中身の表示/非表示を切り替え
+            
+            if (content.classList.contains('is-closed')) {
+                icon.style.transform = 'rotate(-90deg)'; // 閉じている時は矢印を横向き(◀)にする
+            } else {
+                icon.style.transform = 'rotate(0deg)'; // 開いている時は矢印を下向き(▼)にする
+            }
+        });
+    </script>
+
+    <script src="main.js"></script>
+</body>
+</html>
